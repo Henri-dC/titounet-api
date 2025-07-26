@@ -21,16 +21,12 @@ const wooApi = new WooCommerceAPI({
 });
 
 // Nodemailer transporter setup
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    type: 'OAuth2',
-    user: process.env.GMAIL_USER,
-    clientId: process.env.GMAIL_CLIENT_ID,
-    clientSecret: process.env.GMAIL_CLIENT_SECRET,
-    refreshToken: process.env.GMAIL_REFRESH_TOKEN,
-  },
-});
+const MailjetTransport = require('nodemailer-mailjet-transport');
+
+const transporter = nodemailer.createTransport(MailjetTransport({
+  apiKey: process.env.MAILJET_API_KEY,
+  apiSecret: process.env.MAILJET_SECRET_KEY,
+}));
 
 console.log('WooCommerce API Config:', wooApi.options); // Log the config
 
