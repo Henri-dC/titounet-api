@@ -432,26 +432,9 @@ app.get("/api/media/category/:slug", async (req, res) => {
   }
 
   try {
-    // 1. Trouver l'ID de la catégorie à partir de son slug
-    const categoriesResponse = await axios.get(`${WP_API_URL}/wp/v2/media_category`, {
-      params: {
-        slug: categorySlug,
-      },
-       auth: {
-        username: WP_USERNAME,
-        password: WP_PASSWORD,
-      },
-    });
-
-    if (categoriesResponse.data.length === 0) {
-      return res.status(404).json({ error: "Catégorie non trouvée" });
-    }
-    const categoryId = categoriesResponse.data[0].id;
-
-    // 2. Récupérer les médias de cette catégorie
     const mediaResponse = await axios.get(`${WP_API_URL}/wp/v2/media`, {
       params: {
-        media_category: categoryId,
+        mla_category: categorySlug,
         per_page: 100, // Ajustez si nécessaire
       },
        auth: {
