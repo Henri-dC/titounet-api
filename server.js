@@ -83,7 +83,7 @@ app.post("/api/orders", (req, res) => {
     // Envoi de l'e-mail de confirmation
     try {
       const mailOptions = {
-        from: process.env.GMAIL_USER, // Votre adresse email Gmail
+        from: process.env.MAIL_FROM, // L'adresse e-mail de l'expéditeur
         to: orderData.billing.email, // Adresse email du client
         subject: "Confirmation de votre commande Titounet",
         html: `
