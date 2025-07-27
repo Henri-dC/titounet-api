@@ -434,8 +434,8 @@ app.get("/api/media/category/:slug", async (req, res) => {
   try {
     const mediaResponse = await axios.get(`${WP_API_URL}/wp/v2/media`, {
       params: {
-        mla_category: categorySlug,
-        per_page: 100, // Ajustez si nécessaire
+        mla_category: categorySlug, // <-- CORRECTION : Utilise mla_category avec le slug
+        ...req.query, // Transmet tous les autres paramètres de requête du frontend (per_page, _embed, etc.)
       },
        auth: {
         username: WP_USERNAME,
