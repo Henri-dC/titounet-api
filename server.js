@@ -196,8 +196,8 @@ app.get("/api/products", async (req, res) => {
     );
     const response = await axios.get(wooCommerceProductsUrl, {
       auth: {
-        username: process.env.WOO_CONSUMER_KEY,
-        password: process.env.WOO_CONSUMER_SECRET,
+        username: process.env.ADMIN_USERNAME,
+        password: process.env.ADMIN_PASSWORD,
       },
     });
     console.log("Backend: Successfully fetched products from WooCommerce.");
