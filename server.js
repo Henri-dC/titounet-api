@@ -168,8 +168,8 @@ app.post("/api/products", async (req, res) => {
   try {
     const response = await axios.post(customProductCreateUrl, productData, {
       auth: {
-        username: process.env.WOO_CONSUMER_KEY,
-        password: process.env.WOO_CONSUMER_SECRET,
+        username: process.env.ADMIN_USERNAME,
+        password: process.env.ADMIN_PASSWORD,
       },
     });
     res.status(201).json(response.data);
@@ -196,8 +196,8 @@ app.get("/api/products", async (req, res) => {
     );
     const response = await axios.get(wooCommerceProductsUrl, {
       auth: {
-        username: process.env.ADMIN_USERNAME,
-        password: process.env.ADMIN_PASSWORD,
+        username: process.env.WOO_CONSUMER_KEY,
+        password: process.env.WOO_CONSUMER_SECRET,
       },
     });
     console.log("Backend: Successfully fetched products from WooCommerce.");
