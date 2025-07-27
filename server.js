@@ -166,12 +166,7 @@ app.post("/api/products", async (req, res) => {
   console.log("Backend: Received request to create products.");
 
   try {
-    const response = await axios.post(customProductCreateUrl, productData, {
-      auth: {
-        username: process.env.ADMIN_USERNAME,
-        password: process.env.ADMIN_PASSWORD,
-      },
-    });
+    const response = await axios.post(customProductCreateUrl, productData);
     res.status(201).json(response.data);
   } catch (error) {
     console.error(
