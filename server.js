@@ -21,9 +21,9 @@ const wooApi = new WooCommerceAPI({
 });
 
 // Nodemailer transporter setup
-const MailjetTransport = require("nodemailer-mailjet-transport");
-const nodemailer = require("nodemailer");
 
+
+const MailjetTransport = require("nodemailer-mailjet-transport");
 const transporter = nodemailer.createTransport(
   MailjetTransport({
     auth: {
