@@ -402,6 +402,29 @@ app.get("/api/articles/:id", async (req, res) => {
   }
 });
 
+// --- Endpoint pour récupérer tous les médias WordPress ---
+app.get("/api/media", async (req, res) => {
+  try {
+    const response = await axios.get(`${WP_API_URL}/wp/v2/media`, {
+      params: req.query, // Passer les paramètres de requête du frontend
+      auth: {
+        username: WP_USERNAME,
+        password: WP_PASSWORD,
+      },
+    });
+    res.status(200).json(response.data);
+  } catch (error) {
+    console.error(
+      "Backend: Erreur lors de la récupération des médias (Axios):",
+      error.response ? error.response.data : error.message
+    );
+    res.status(error.response ? error.response.status : 500).json({
+      error: "Erreur lors de la récupération des médias",
+      details: error.response ? error.response.data : error.message,
+    });
+  }
+});
+
 // --- Endpoint pour récupérer les médias par catégorie ---
 app.get("/api/media/category/:slug", async (req, res) => {
   const categorySlug = req.params.slug;
