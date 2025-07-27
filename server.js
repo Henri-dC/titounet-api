@@ -22,7 +22,6 @@ const wooApi = new WooCommerceAPI({
 
 // Nodemailer transporter setup
 
-
 const MailjetTransport = require("nodemailer-mailjet-transport");
 const transporter = nodemailer.createTransport(
   MailjetTransport({
@@ -70,12 +69,10 @@ app.post("/api/orders", (req, res) => {
         err.message || err,
         err.stack
       );
-      return res
-        .status(500)
-        .json({
-          error: "Erreur lors de la création de la commande",
-          details: err.message || err,
-        });
+      return res.status(500).json({
+        error: "Erreur lors de la création de la commande",
+        details: err.message || err,
+      });
     }
 
     try {
@@ -85,7 +82,9 @@ app.post("/api/orders", (req, res) => {
       // Envoyer la réponse au client immédiatement pour éviter les timeouts.
       // Le code 201 "Created" est plus approprié pour un POST qui crée une ressource.
       res.status(201).json(orderResponse);
-      console.log(`Successfully sent 201 response for order #${orderResponse.id}.`);
+      console.log(
+        `Successfully sent 201 response for order #${orderResponse.id}.`
+      );
 
       // Ensuite, envoyer l'e-mail de confirmation en arrière-plan.
       console.log("Attempting to send confirmation email in the background...");
@@ -124,7 +123,6 @@ app.post("/api/orders", (req, res) => {
         }
         console.log("Email de confirmation envoyé avec succès:", info.response);
       });
-
     } catch (parseError) {
       console.error(
         "Erreur lors du parsing de la réponse WooCommerce:",
@@ -198,12 +196,10 @@ app.get("/api/products", async (req, res) => {
       "Backend: Erreur lors de la récupération des produits (Axios):",
       error.response ? error.response.data : error.message
     );
-    res
-      .status(error.response ? error.response.status : 500)
-      .json({
-        error: "Erreur lors de la récupération des produits",
-        details: error.response ? error.response.data : error.message,
-      });
+    res.status(error.response ? error.response.status : 500).json({
+      error: "Erreur lors de la récupération des produits",
+      details: error.response ? error.response.data : error.message,
+    });
   }
 });
 
@@ -232,12 +228,10 @@ app.get("/api/products/:id", async (req, res) => {
       "Backend: Erreur lors de la récupération du produit (Axios):",
       error.response ? error.response.data : error.message
     );
-    res
-      .status(error.response ? error.response.status : 500)
-      .json({
-        error: "Erreur lors de la récupération du produit",
-        details: error.response ? error.response.data : error.message,
-      });
+    res.status(error.response ? error.response.status : 500).json({
+      error: "Erreur lors de la récupération du produit",
+      details: error.response ? error.response.data : error.message,
+    });
   }
 });
 
@@ -249,12 +243,10 @@ app.put("/api/products/:id", (req, res) => {
   wooApi.put(`products/${productId}`, productData, (err, data, resWoo) => {
     if (err) {
       console.error("Erreur WooCommerce:", err);
-      return res
-        .status(500)
-        .json({
-          error: "Erreur lors de la mise à jour du produit",
-          details: err,
-        });
+      return res.status(500).json({
+        error: "Erreur lors de la mise à jour du produit",
+        details: err,
+      });
     }
     const parsedRes = JSON.parse(resWoo);
     res.status(200).json(parsedRes);
@@ -271,12 +263,10 @@ app.delete("/api/products/:id", (req, res) => {
     (err, data, resWoo) => {
       if (err) {
         console.error("Erreur WooCommerce:", err);
-        return res
-          .status(500)
-          .json({
-            error: "Erreur lors de la suppression du produit",
-            details: err,
-          });
+        return res.status(500).json({
+          error: "Erreur lors de la suppression du produit",
+          details: err,
+        });
       }
       const parsedRes = JSON.parse(resWoo);
       res.status(200).json(parsedRes);
@@ -308,12 +298,10 @@ app.post("/api/media", upload.single("file"), async (req, res) => {
       "Erreur lors du téléchargement du média:",
       error.response ? error.response.data : error.message
     );
-    res
-      .status(error.response ? error.response.status : 500)
-      .json({
-        error: "Erreur lors du téléchargement du média",
-        details: error.response ? error.response.data : error.message,
-      });
+    res.status(error.response ? error.response.status : 500).json({
+      error: "Erreur lors du téléchargement du média",
+      details: error.response ? error.response.data : error.message,
+    });
   }
 });
 
@@ -335,12 +323,10 @@ app.get("/api/product-categories", async (req, res) => {
       "Erreur lors de la récupération des catégories de produits (Axios):",
       error.response ? error.response.data : error.message
     );
-    res
-      .status(error.response ? error.response.status : 500)
-      .json({
-        error: "Erreur lors de la récupération des catégories de produits",
-        details: error.response ? error.response.data : error.message,
-      });
+    res.status(error.response ? error.response.status : 500).json({
+      error: "Erreur lors de la récupération des catégories de produits",
+      details: error.response ? error.response.data : error.message,
+    });
   }
 });
 
@@ -362,12 +348,10 @@ app.get("/api/product-categories", async (req, res) => {
       "Erreur lors de la récupération des catégories de produits (Axios):",
       error.response ? error.response.data : error.message
     );
-    res
-      .status(error.response ? error.response.status : 500)
-      .json({
-        error: "Erreur lors de la récupération des catégories de produits",
-        details: error.response ? error.response.data : error.message,
-      });
+    res.status(error.response ? error.response.status : 500).json({
+      error: "Erreur lors de la récupération des catégories de produits",
+      details: error.response ? error.response.data : error.message,
+    });
   }
 });
 
@@ -387,12 +371,10 @@ app.get("/api/articles", async (req, res) => {
       "Backend: Erreur lors de la récupération des articles (Axios):",
       error.response ? error.response.data : error.message
     );
-    res
-      .status(error.response ? error.response.status : 500)
-      .json({
-        error: "Erreur lors de la récupération des articles",
-        details: error.response ? error.response.data : error.message,
-      });
+    res.status(error.response ? error.response.status : 500).json({
+      error: "Erreur lors de la récupération des articles",
+      details: error.response ? error.response.data : error.message,
+    });
   }
 });
 
@@ -413,31 +395,30 @@ app.get("/api/articles/:id", async (req, res) => {
       "Backend: Erreur lors de la récupération de l'article (Axios):",
       error.response ? error.response.data : error.message
     );
-    res
-      .status(error.response ? error.response.status : 500)
-      .json({
-        error: "Erreur lors de la récupération de l'article",
-        details: error.response ? error.response.data : error.message,
-      });
+    res.status(error.response ? error.response.status : 500).json({
+      error: "Erreur lors de la récupération de l'article",
+      details: error.response ? error.response.data : error.message,
+    });
   }
 });
-
 
 // --- Endpoint pour récupérer les médias par catégorie ---
 app.get("/api/media/category/:slug", async (req, res) => {
   const categorySlug = req.params.slug;
 
   if (!categorySlug) {
-    return res.status(400).json({ error: "Le slug de la catégorie est requis" });
+    return res
+      .status(400)
+      .json({ error: "Le slug de la catégorie est requis" });
   }
 
   try {
     const mediaResponse = await axios.get(`${WP_API_URL}/wp/v2/media`, {
       params: {
-        mla_category: categorySlug, // <-- CORRECTION : Utilise mla_category avec le slug
+        attachment_category: categorySlug, // <-- CORRECTION : Utilise attachment_category avec le slug
         ...req.query, // Transmet tous les autres paramètres de requête du frontend (per_page, _embed, etc.)
       },
-       auth: {
+      auth: {
         username: WP_USERNAME,
         password: WP_PASSWORD,
       },
@@ -460,4 +441,3 @@ app.get("/api/media/category/:slug", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Serveur backend démarré sur le port ${PORT}`);
 });
-
