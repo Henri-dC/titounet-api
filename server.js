@@ -162,6 +162,8 @@ app.post("/api/auth/login", (req, res) => {
 app.post("/api/products", async (req, res) => {
   const productData = req.body;
   const customProductCreateUrl = `${process.env.WOO_API_URL}/wp-json/custom/v1/create-product`;
+  console.log("URL appelée :", customProductCreateUrl);
+  console.log("Backend: Received request to create products.");
 
   try {
     const response = await axios.post(customProductCreateUrl, productData, {
