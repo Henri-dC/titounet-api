@@ -62,7 +62,7 @@ app.post("/api/orders", (req, res) => {
   console.log("Received request to create order.");
   const orderData = req.body;
 
-  wooApi.post("orders", orderData, async (err, data, resWoo) => {
+  wooApi.post("orders", orderData, (err, data, resWoo) => {
     console.log("WooCommerce API response received.");
     if (err) {
       console.error(
@@ -77,46 +77,67 @@ app.post("/api/orders", (req, res) => {
           details: err.message || err,
         });
     }
-    const parsedRes = JSON.parse(resWoo);
 
-    console.log("Attempting to send confirmation email...");
-    // Envoi de l'e-mail de confirmation
     try {
+      // La documentation de woocommerce-api indique que `data` est le corps de la réponse sous forme de chaîne.
+      const orderResponse = JSON.parse(data);
+
+      // Envoyer la réponse au client immédiatement pour éviter les timeouts.
+      // Le code 201 "Created" est plus approprié pour un POST qui crée une ressource.
+      res.status(201).json(orderResponse);
+      console.log(`Successfully sent 201 response for order #${orderResponse.id}.`);
+
+      // Ensuite, envoyer l'e-mail de confirmation en arrière-plan.
+      console.log("Attempting to send confirmation email in the background...");
       const mailOptions = {
-        from: process.env.MAIL_FROM, // L'adresse e-mail de l'expéditeur
-        to: orderData.billing.email, // Adresse email du client
+        from: process.env.MAIL_FROM,
+        to: orderData.billing.email,
         subject: "Confirmation de votre commande Titounet",
         html: `
           <h1>Merci pour votre commande !</h1>
           <p>Votre commande #${
-            parsedRes.id
+            orderResponse.id
           } a été reçue et est en cours de traitement.</p>
           <p>Détails de la commande:</p>
           <ul>
-            ${(parsedRes.line_items || [])
+            ${(orderResponse.line_items || [])
               .map(
                 (item) =>
                   `<li>${item.name} (x${item.quantity}) - ${item.total} €</li>`
               )
               .join("")}
           </ul>
-          <p>Total: ${parsedRes.total} €</p>
+          <p>Total: ${orderResponse.total} €</p>
           <p>Nous vous contacterons bientôt pour les détails de livraison.</p>
           <p>Cordialement,<br>L'équipe Titounet</p>
         `,
       };
-      console.log("Mail options prepared:", mailOptions);
-      await transporter.sendMail(mailOptions);
-      console.log("Email de confirmation envoyé au client.");
-    } catch (emailError) {
-      console.error(
-        "Erreur lors de l'envoi de l'email de confirmation:",
-        emailError
-      );
-      // Ne pas bloquer la réponse HTTP même si l'email échoue
-    }
 
-    res.status(200).json(parsedRes);
+      // Utiliser un callback pour ne pas bloquer la réponse.
+      transporter.sendMail(mailOptions, (emailError, info) => {
+        if (emailError) {
+          console.error(
+            "Erreur lors de l'envoi de l'email de confirmation en arrière-plan:",
+            emailError
+          );
+          return;
+        }
+        console.log("Email de confirmation envoyé avec succès:", info.response);
+      });
+
+    } catch (parseError) {
+      console.error(
+        "Erreur lors du parsing de la réponse WooCommerce:",
+        parseError
+      );
+      // Si la réponse n'a pas encore été envoyée, envoyer une erreur.
+      if (!res.headersSent) {
+        res.status(500).json({
+          error: "Erreur lors du traitement de la réponse de la commande",
+          details: parseError.message,
+        });
+      }
+    }
   });
 });
 
@@ -401,7 +422,59 @@ app.get("/api/articles/:id", async (req, res) => {
   }
 });
 
+
+// --- Endpoint pour récupérer les médias par catégorie ---
+app.get("/api/media/category/:slug", async (req, res) => {
+  const categorySlug = req.params.slug;
+
+  if (!categorySlug) {
+    return res.status(400).json({ error: "Le slug de la catégorie est requis" });
+  }
+
+  try {
+    // 1. Trouver l'ID de la catégorie à partir de son slug
+    const categoriesResponse = await axios.get(`${WP_API_URL}/wp/v2/media_category`, {
+      params: {
+        slug: categorySlug,
+      },
+       auth: {
+        username: WP_USERNAME,
+        password: WP_PASSWORD,
+      },
+    });
+
+    if (categoriesResponse.data.length === 0) {
+      return res.status(404).json({ error: "Catégorie non trouvée" });
+    }
+    const categoryId = categoriesResponse.data[0].id;
+
+    // 2. Récupérer les médias de cette catégorie
+    const mediaResponse = await axios.get(`${WP_API_URL}/wp/v2/media`, {
+      params: {
+        media_category: categoryId,
+        per_page: 100, // Ajustez si nécessaire
+      },
+       auth: {
+        username: WP_USERNAME,
+        password: WP_PASSWORD,
+      },
+    });
+
+    res.status(200).json(mediaResponse.data);
+  } catch (error) {
+    console.error(
+      "Erreur lors de la récupération des médias par catégorie:",
+      error.response ? error.response.data : error.message
+    );
+    res.status(error.response ? error.response.status : 500).json({
+      error: "Erreur lors de la récupération des médias par catégorie",
+      details: error.response ? error.response.data : error.message,
+    });
+  }
+});
+
 // Démarrage du serveur
 app.listen(PORT, () => {
   console.log(`Serveur backend démarré sur le port ${PORT}`);
 });
+
