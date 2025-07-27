@@ -158,20 +158,29 @@ app.post("/api/auth/login", (req, res) => {
   }
 });
 
-// --- Endpoint pour créer un produit WooCommerce ---
-app.post("/api/products", (req, res) => {
+// --- Endpoint pour créer un produit WooCommerce (appelant une route custom) ---
+app.post("/api/products", async (req, res) => {
   const productData = req.body;
+  const customProductCreateUrl = `${process.env.WOO_API_URL}/wp-json/custom/v1/create-product`;
 
-  wooApi.post("products", productData, (err, data, resWoo) => {
-    if (err) {
-      console.error("Erreur WooCommerce:", err);
-      return res
-        .status(500)
-        .json({ error: "Erreur lors de la création du produit", details: err });
-    }
-    const parsedRes = JSON.parse(resWoo);
-    res.status(201).json(parsedRes);
-  });
+  try {
+    const response = await axios.post(customProductCreateUrl, productData, {
+      auth: {
+        username: process.env.WOO_CONSUMER_KEY,
+        password: process.env.WOO_CONSUMER_SECRET,
+      },
+    });
+    res.status(201).json(response.data);
+  } catch (error) {
+    console.error(
+      "Erreur lors de la création du produit via la route custom (Axios):",
+      error.response ? error.response.data : error.message
+    );
+    res.status(error.response ? error.response.status : 500).json({
+      error: "Erreur lors de la création du produit via la route custom",
+      details: error.response ? error.response.data : error.message,
+    });
+  }
 });
 
 // --- Endpoint pour récupérer tous les produits WooCommerce (avec Axios) ---
