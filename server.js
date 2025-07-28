@@ -488,6 +488,30 @@ app.put("/api/media/:mediaId", async (req, res) => {
   }
 });
 
+// --- Endpoint pour supprimer un média WordPress ---
+app.delete("/api/media/:mediaId", async (req, res) => {
+  const mediaId = req.params.mediaId;
+
+  try {
+    const response = await axios.delete(`${WP_API_URL}/wp/v2/media/${mediaId}?force=true`, {
+      auth: {
+        username: WP_USERNAME,
+        password: WP_PASSWORD,
+      },
+    });
+    res.status(200).json(response.data);
+  } catch (error) {
+    console.error(
+      "Backend: Erreur lors de la suppression du média (Axios):",
+      error.response ? error.response.data : error.message
+    );
+    res.status(error.response ? error.response.status : 500).json({
+      error: "Erreur lors de la suppression du média",
+      details: error.response ? error.response.data : error.message,
+    });
+  }
+});
+
 // --- Endpoint pour récupérer les médias par catégorie ---
 app.get("/api/media/category/:slug", async (req, res) => {
   const categorySlug = req.params.slug;
