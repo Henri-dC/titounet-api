@@ -454,6 +454,40 @@ app.get("/api/media", async (req, res) => {
   }
 });
 
+// --- Endpoint pour mettre à jour les catégories d'un média WordPress ---
+app.put("/api/media/:mediaId", async (req, res) => {
+  const mediaId = req.params.mediaId;
+  const { attachment_category } = req.body; // Récupère le tableau d'IDs de catégories
+
+  if (!Array.isArray(attachment_category)) {
+    return res.status(400).json({ error: "Le corps de la requête doit contenir un tableau 'attachment_category'." });
+  }
+
+  try {
+    const response = await axios.post(`${WP_API_URL}/wp/v2/media/${mediaId}`, {
+      attachment_category: attachment_category,
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      auth: {
+        username: WP_USERNAME,
+        password: WP_PASSWORD,
+      },
+    });
+    res.status(200).json(response.data);
+  } catch (error) {
+    console.error(
+      "Backend: Erreur lors de la mise à jour des catégories du média (Axios):",
+      error.response ? error.response.data : error.message
+    );
+    res.status(error.response ? error.response.status : 500).json({
+      error: "Erreur lors de la mise à jour des catégories du média",
+      details: error.response ? error.response.data : error.message,
+    });
+  }
+});
+
 // --- Endpoint pour récupérer les médias par catégorie ---
 app.get("/api/media/category/:slug", async (req, res) => {
   const categorySlug = req.params.slug;
