@@ -166,12 +166,7 @@ app.post("/api/products", async (req, res) => {
   console.log("Backend: Received request to create products.");
 
   try {
-    const response = await axios.post(customProductCreateUrl, productData, {
-      auth: {
-        username: process.env.ADMIN_USERNAME,
-        password: process.env.ADMIN_PASSWORD,
-      },
-    });
+    const response = await axios.post(customProductCreateUrl, productData);
     res.status(201).json(response.data);
   } catch (error) {
     console.error(
@@ -361,6 +356,29 @@ app.get("/api/product-categories", async (req, res) => {
     );
     res.status(error.response ? error.response.status : 500).json({
       error: "Erreur lors de la récupération des catégories de produits",
+      details: error.response ? error.response.data : error.message,
+    });
+  }
+});
+
+// --- Endpoint pour récupérer les catégories de médias (attachment_category) ---
+app.get("/api/media_category", async (req, res) => {
+  try {
+    const response = await axios.get(`${WP_API_URL}/wp/v2/attachment_category`, {
+      params: req.query, // Passer les paramètres de requête du frontend
+      auth: {
+        username: WP_USERNAME,
+        password: WP_PASSWORD,
+      },
+    });
+    res.status(200).json(response.data);
+  } catch (error) {
+    console.error(
+      "Backend: Erreur lors de la récupération des catégories de médias (Axios):",
+      error.response ? error.response.data : error.message
+    );
+    res.status(error.response ? error.response.status : 500).json({
+      error: "Erreur lors de la récupération des catégories de médias",
       details: error.response ? error.response.data : error.message,
     });
   }
