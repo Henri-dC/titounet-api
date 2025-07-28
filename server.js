@@ -523,6 +523,39 @@ app.get("/api/media/category/:slug", async (req, res) => {
   }
 });
 
+// Nouvel Endpoint pour les Variations de Produit (GET `/products/{product_id}/variations`)
+app.get("/api/products/:product_id/variations", async (req, res) => {
+  const productId = req.params.product_id;
+  console.log(`Backend: Received request to fetch variations for product ID: ${productId}`);
+
+  try {
+    const wooCommerceVariationsUrl = `${process.env.WOO_API_URL}/wp-json/wc/v3/products/${productId}/variations`;
+    console.log(
+      "Backend: Attempting to fetch product variations from WooCommerce URL:",
+      wooCommerceVariationsUrl
+    );
+    const response = await axios.get(wooCommerceVariationsUrl, {
+      auth: {
+        username: process.env.WOO_CONSUMER_KEY,
+        password: process.env.WOO_CONSUMER_SECRET,
+      },
+    });
+    console.log(
+      `Backend: Successfully fetched variations for product ID: ${productId}.`
+    );
+    res.status(200).json(response.data);
+  } catch (error) {
+    console.error(
+      `Backend: Erreur lors de la récupération des variations pour le produit ${productId} (Axios):`,
+      error.response ? error.response.data : error.message
+    );
+    res.status(error.response ? error.response.status : 500).json({
+      error: `Erreur lors de la récupération des variations pour le produit ${productId}`,
+      details: error.response ? error.response.data : error.message,
+    });
+  }
+});
+
 // Démarrage du serveur
 app.listen(PORT, () => {
   console.log(`Serveur backend démarré sur le port ${PORT}`);
