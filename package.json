@@ -11,13 +11,13 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@woocommerce/woocommerce-rest-api": "^1.0.2",
     "axios": "^1.11.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
     "multer": "^2.0.2",
     "nodemailer": "^7.0.5",
-    "nodemailer-mailjet-transport": "^1.0.4",
-    "woocommerce-api": "^1.1.0"
+    "nodemailer-mailjet-transport": "^1.0.4"
   }
 }
