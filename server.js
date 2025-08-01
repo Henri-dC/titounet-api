@@ -607,29 +607,17 @@ app.get("/api/products/:product_id/variations", async (req, res) => {
 app.get("/api/featured-product", async (req, res) => {
   console.log("Backend: Received request to fetch featured products.");
   try {
-    const customFeaturedProductsUrl = `${process.env.WOO_API_URL}/wp-json/custom/v1/featured-product`;
-    console.log(
-      "Backend: Attempting to fetch featured products from custom WordPress URL:",
-      customFeaturedProductsUrl
-    );
-    console.log("Backend: Making Axios GET request to:", customFeaturedProductsUrl);
-    const response = await axios.get(customFeaturedProductsUrl, {
-      auth: {
-        username: process.env.WP_USERNAME,
-        password: process.env.WP_PASSWORD,
-      },
-    });
-    console.log("Backend: Axios GET request successful. Status:", response.status);
-    console.log("Backend: Successfully fetched featured products from custom WordPress API.");
-    res.status(200).json(response.data);
+    const { data } = await wooApi.get("products", { featured: true, ...req.query });
+    console.log("Backend: Successfully fetched featured products from WooCommerce API.");
+    res.status(200).json(data);
   } catch (error) {
     console.error(
-      "Backend: Erreur lors de la récupération des produits mis en avant (Axios):",
-      error.response ? error.response.data : error.message
+      "Backend: Erreur lors de la récupération des produits mis en avant:",
+      error.response?.data || error.message
     );
-    res.status(error.response ? error.response.status : 500).json({
+    res.status(error.response?.status || 500).json({
       error: "Erreur lors de la récupération des produits mis en avant",
-      details: error.response ? error.response.data : error.message,
+      details: error.response?.data || error.message,
     });
   }
 });
