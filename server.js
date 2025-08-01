@@ -1,7 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const WooCommerceAPI = require("woocommerce-api");
+const WooCommerceRestApi = require("@woocommerce/woocommerce-rest-api").default;
 const axios = require("axios");
 const multer = require("multer");
 const FormData = require("form-data");
@@ -11,13 +11,11 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Configuration de WooCommerce API
-const wooApi = new WooCommerceAPI({
+const wooApi = new WooCommerceRestApi({
   url: process.env.WOO_API_URL || "https://www.tontonriton.com", // Remplacez par l'URL de votre site WordPress/WooCommerce
   consumerKey: process.env.WOO_CONSUMER_KEY,
   consumerSecret: process.env.WOO_CONSUMER_SECRET,
   version: "wc/v3",
-  // queryStringAuth: true, // Désactivé explicitement
-  timeout: 10000, // Ajout d'un timeout de 10 secondes
 });
 
 // Nodemailer transporter setup
@@ -57,86 +55,69 @@ app.get("/", (req, res) => {
 });
 
 // Endpoint pour créer une commande WooCommerce
-app.post("/api/orders", (req, res) => {
+app.post("/api/orders", async (req, res) => {
   console.log("Received request to create order.");
   const orderData = req.body;
 
-  wooApi.post("orders", orderData, (err, data, resWoo) => {
+  try {
+    const { data: orderResponse } = await wooApi.post("orders", orderData);
     console.log("WooCommerce API response received.");
-    if (err) {
-      console.error(
-        "Erreur WooCommerce lors de la création de commande:",
-        err.message || err,
-        err.stack
-      );
-      return res.status(500).json({
-        error: "Erreur lors de la création de la commande",
-        details: err.message || err,
-      });
-    }
 
-    try {
-      // La documentation de woocommerce-api indique que `data` est le corps de la réponse sous forme de chaîne.
-      const orderResponse = JSON.parse(data);
+    // Envoyer la réponse au client immédiatement pour éviter les timeouts.
+    // Le code 201 "Created" est plus approprié pour un POST qui crée une ressource.
+    res.status(201).json(orderResponse);
+    console.log(
+      `Successfully sent 201 response for order #${orderResponse.id}.`
+    );
 
-      // Envoyer la réponse au client immédiatement pour éviter les timeouts.
-      // Le code 201 "Created" est plus approprié pour un POST qui crée une ressource.
-      res.status(201).json(orderResponse);
-      console.log(
-        `Successfully sent 201 response for order #${orderResponse.id}.`
-      );
+    // Ensuite, envoyer l'e-mail de confirmation en arrière-plan.
+    console.log("Attempting to send confirmation email in the background...");
+    const mailOptions = {
+      from: process.env.MAIL_FROM,
+      to: orderData.billing.email,
+      subject: "Confirmation de votre commande Titounet",
+      html: `
+        <h1>Merci pour votre commande !</h1>
+        <p>Votre commande #${
+          orderResponse.id
+        } a été reçue et est en cours de traitement.</p>
+        <p>Détails de la commande:</p>
+        <ul>
+          ${(orderResponse.line_items || [])
+            .map(
+              (item) =>
+                `<li>${item.name} (x${item.quantity}) - ${item.total} €</li>`
+            )
+            .join("")}
+        </ul>
+        <p>Total: ${orderResponse.total} €</p>
+        <p>Nous vous contacterons bientôt pour les détails de livraison.</p>
+        <p>Cordialement,<br>L'équipe Titounet</p>
+      `,
+    };
 
-      // Ensuite, envoyer l'e-mail de confirmation en arrière-plan.
-      console.log("Attempting to send confirmation email in the background...");
-      const mailOptions = {
-        from: process.env.MAIL_FROM,
-        to: orderData.billing.email,
-        subject: "Confirmation de votre commande Titounet",
-        html: `
-          <h1>Merci pour votre commande !</h1>
-          <p>Votre commande #${
-            orderResponse.id
-          } a été reçue et est en cours de traitement.</p>
-          <p>Détails de la commande:</p>
-          <ul>
-            ${(orderResponse.line_items || [])
-              .map(
-                (item) =>
-                  `<li>${item.name} (x${item.quantity}) - ${item.total} €</li>`
-              )
-              .join("")}
-          </ul>
-          <p>Total: ${orderResponse.total} €</p>
-          <p>Nous vous contacterons bientôt pour les détails de livraison.</p>
-          <p>Cordialement,<br>L'équipe Titounet</p>
-        `,
-      };
-
-      // Utiliser un callback pour ne pas bloquer la réponse.
-      transporter.sendMail(mailOptions, (emailError, info) => {
-        if (emailError) {
-          console.error(
-            "Erreur lors de l'envoi de l'email de confirmation en arrière-plan:",
-            emailError
-          );
-          return;
-        }
-        console.log("Email de confirmation envoyé avec succès:", info.response);
-      });
-    } catch (parseError) {
-      console.error(
-        "Erreur lors du parsing de la réponse WooCommerce:",
-        parseError
-      );
-      // Si la réponse n'a pas encore été envoyée, envoyer une erreur.
-      if (!res.headersSent) {
-        res.status(500).json({
-          error: "Erreur lors du traitement de la réponse de la commande",
-          details: parseError.message,
-        });
+    // Utiliser un callback pour ne pas bloquer la réponse.
+    transporter.sendMail(mailOptions, (emailError, info) => {
+      if (emailError) {
+        console.error(
+          "Erreur lors de l'envoi de l'email de confirmation en arrière-plan:",
+          emailError
+        );
+        return;
       }
-    }
-  });
+      console.log("Email de confirmation envoyé avec succès:", info.response);
+    });
+  } catch (error) {
+    console.error(
+      "Erreur WooCommerce lors de la création de commande:",
+      error.response?.data || error.message,
+      error.stack
+    );
+    res.status(500).json({
+      error: "Erreur lors de la création de la commande",
+      details: error.response?.data || error.message,
+    });
+  }
 });
 
 // --- Authentification (simple pour la démo, à remplacer par un système robuste) ---
@@ -158,7 +139,29 @@ app.post("/api/auth/login", (req, res) => {
   }
 });
 
+// --- Endpoint pour créer un produit WooCommerce ---
+app.post("/api/products", async (req, res) => {
+  console.log("Backend: Received request to create product.");
+  const productData = req.body;
+
+  try {
+    const { data } = await wooApi.post("products", productData);
+    console.log("Backend: Successfully created product.");
+    res.status(201).json(data);
+  } catch (error) {
+    console.error(
+      "Backend: Erreur lors de la création du produit:",
+      error.response?.data || error.message
+    );
+    res.status(error.response?.status || 500).json({
+      error: "Erreur lors de la création du produit",
+      details: error.response?.data || error.message,
+    });
+  }
+});
+
 // --- Endpoint pour créer un produit WooCommerce (appelant une route custom) ---
+/*
 app.post("/api/products", async (req, res) => {
   const productData = req.body;
   const customProductCreateUrl = `${process.env.WOO_API_URL}/wp-json/custom/v1/create-product`;
@@ -179,32 +182,57 @@ app.post("/api/products", async (req, res) => {
     });
   }
 });
+*/
+
+// --- Endpoint pour mettre à jour un produit WooCommerce (route custom commentée) ---
+/*
+app.put("/api/products/:id/custom-update", async (req, res) => {
+  const productId = req.params.id;
+  const productData = req.body;
+  const customProductUpdateUrl = `${WP_API_URL}/custom/v1/update-product/${productId}`;
+  console.log("URL appelée :", customProductUpdateUrl);
+  console.log(
+    `Backend: Received request to update product ${productId} via custom route.`
+  );
+
+  try {
+    const response = await axios.put(customProductUpdateUrl, productData);
+    res.status(200).json(response.data);
+  } catch (error) {
+    console.error(
+      "Erreur lors de la mise à jour du produit via la route custom (Axios):",
+      error.response ? error.response.data : error.message
+    );
+    res.status(error.response ? error.response.status : 500).json({
+      error: "Erreur lors de la mise à jour du produit via la route custom",
+      details: error.response ? error.response.data : error.message,
+    });
+  }
+});
+*/
 
 // --- Endpoint pour récupérer tous les produits WooCommerce (avec Axios) ---
 app.get("/api/products", async (req, res) => {
   console.log("Backend: Received request to fetch products.");
   try {
-    const wooCommerceProductsUrl = `${process.env.WOO_API_URL}/wp-json/wc/v3/products`;
-    console.log(
-      "Backend: Attempting to fetch products from WooCommerce URL:",
-      wooCommerceProductsUrl
-    );
-    const response = await axios.get(wooCommerceProductsUrl, {
-      auth: {
-        username: process.env.WOO_CONSUMER_KEY,
-        password: process.env.WOO_CONSUMER_SECRET,
-      },
-    });
+    const params = { ...req.query };
+    if (params.per_page) {
+      params.per_page = parseInt(params.per_page, 10);
+    }
+    if (params.page) {
+      params.page = parseInt(params.page, 10);
+    }
+    const { data } = await wooApi.get("products", params);
     console.log("Backend: Successfully fetched products from WooCommerce.");
-    res.status(200).json(response.data);
+    res.status(200).json(data);
   } catch (error) {
     console.error(
-      "Backend: Erreur lors de la récupération des produits (Axios):",
-      error.response ? error.response.data : error.message
+      "Backend: Erreur lors de la récupération des produits:",
+      error.response?.data || error.message
     );
-    res.status(error.response ? error.response.status : 500).json({
+    res.status(error.response?.status || 500).json({
       error: "Erreur lors de la récupération des produits",
-      details: error.response ? error.response.data : error.message,
+      details: error.response?.data || error.message,
     });
   }
 });
@@ -214,70 +242,60 @@ app.get("/api/products/:id", async (req, res) => {
   console.log("Backend: Received request to fetch single product.");
   try {
     const productId = req.params.id;
-    const wooCommerceProductUrl = `${process.env.WOO_API_URL}/wp-json/wc/v3/products/${productId}`;
-    console.log(
-      "Backend: Attempting to fetch product from WooCommerce URL:",
-      wooCommerceProductUrl
-    );
-    const response = await axios.get(wooCommerceProductUrl, {
-      auth: {
-        username: process.env.WOO_CONSUMER_KEY,
-        password: process.env.WOO_CONSUMER_SECRET,
-      },
-    });
+    const { data } = await wooApi.get(`products/${productId}`);
     console.log(
       "Backend: Successfully fetched single product from WooCommerce."
     );
-    res.status(200).json(response.data);
+    res.status(200).json(data);
   } catch (error) {
     console.error(
-      "Backend: Erreur lors de la récupération du produit (Axios):",
-      error.response ? error.response.data : error.message
+      "Backend: Erreur lors de la récupération du produit:",
+      error.response?.data || error.message
     );
-    res.status(error.response ? error.response.status : 500).json({
+    res.status(error.response?.status || 500).json({
       error: "Erreur lors de la récupération du produit",
-      details: error.response ? error.response.data : error.message,
+      details: error.response?.data || error.message,
     });
   }
 });
 
 // --- Endpoint pour mettre à jour un produit WooCommerce ---
-app.put("/api/products/:id", (req, res) => {
+app.put("/api/products/:id", async (req, res) => {
   const productId = req.params.id;
   const productData = req.body;
 
-  wooApi.put(`products/${productId}`, productData, (err, data, resWoo) => {
-    if (err) {
-      console.error("Erreur WooCommerce:", err);
-      return res.status(500).json({
-        error: "Erreur lors de la mise à jour du produit",
-        details: err,
-      });
-    }
-    const parsedRes = JSON.parse(resWoo);
-    res.status(200).json(parsedRes);
-  });
+  try {
+    const { data } = await wooApi.put(`products/${productId}`, productData);
+    res.status(200).json(data);
+  } catch (error) {
+    console.error(
+      "Erreur lors de la mise à jour du produit:",
+      error.response?.data || error.message
+    );
+    res.status(error.response?.status || 500).json({
+      error: "Erreur lors de la mise à jour du produit",
+      details: error.response?.data || error.message,
+    });
+  }
 });
 
 // --- Endpoint pour supprimer un produit WooCommerce ---
-app.delete("/api/products/:id", (req, res) => {
+app.delete("/api/products/:id", async (req, res) => {
   const productId = req.params.id;
 
-  wooApi.delete(
-    `products/${productId}`,
-    { force: true },
-    (err, data, resWoo) => {
-      if (err) {
-        console.error("Erreur WooCommerce:", err);
-        return res.status(500).json({
-          error: "Erreur lors de la suppression du produit",
-          details: err,
-        });
-      }
-      const parsedRes = JSON.parse(resWoo);
-      res.status(200).json(parsedRes);
-    }
-  );
+  try {
+    const { data } = await wooApi.delete(`products/${productId}`, { force: true });
+    res.status(200).json(data);
+  } catch (error) {
+    console.error(
+      "Erreur lors de la suppression du produit:",
+      error.response?.data || error.message
+    );
+    res.status(error.response?.status || 500).json({
+      error: "Erreur lors de la suppression du produit",
+      details: error.response?.data || error.message,
+    });
+  }
 });
 
 // --- Endpoint pour télécharger un média WordPress ---
@@ -314,24 +332,23 @@ app.post("/api/media", upload.single("file"), async (req, res) => {
 // --- Endpoint pour récupérer les catégories de produits WooCommerce (avec Axios) ---
 app.get("/api/product-categories", async (req, res) => {
   try {
-    const response = await axios.get(
-      `${process.env.WOO_API_URL}/wp-json/wc/v3/products/categories`,
-      {
-        auth: {
-          username: process.env.WOO_CONSUMER_KEY,
-          password: process.env.WOO_CONSUMER_SECRET,
-        },
-      }
-    );
-    res.status(200).json(response.data);
+    const params = { ...req.query };
+    if (params.per_page) {
+      params.per_page = parseInt(params.per_page, 10);
+    }
+    if (params.page) {
+      params.page = parseInt(params.page, 10);
+    }
+    const { data } = await wooApi.get("products/categories", params);
+    res.status(200).json(data);
   } catch (error) {
     console.error(
-      "Erreur lors de la récupération des catégories de produits (Axios):",
-      error.response ? error.response.data : error.message
+      "Erreur lors de la récupération des catégories de produits:",
+      error.response?.data || error.message
     );
-    res.status(error.response ? error.response.status : 500).json({
+    res.status(error.response?.status || 500).json({
       error: "Erreur lors de la récupération des catégories de produits",
-      details: error.response ? error.response.data : error.message,
+      details: error.response?.data || error.message,
     });
   }
 });
@@ -339,24 +356,23 @@ app.get("/api/product-categories", async (req, res) => {
 // --- Endpoint pour récupérer les catégories de produits WooCommerce (avec Axios) ---
 app.get("/api/product-categories", async (req, res) => {
   try {
-    const response = await axios.get(
-      `${process.env.WOO_API_URL}/wp-json/wc/v3/products/categories`,
-      {
-        auth: {
-          username: process.env.WOO_CONSUMER_KEY,
-          password: process.env.WOO_CONSUMER_SECRET,
-        },
-      }
-    );
-    res.status(200).json(response.data);
+    const params = { ...req.query };
+    if (params.per_page) {
+      params.per_page = parseInt(params.per_page, 10);
+    }
+    if (params.page) {
+      params.page = parseInt(params.page, 10);
+    }
+    const { data } = await wooApi.get("products/categories", params);
+    res.status(200).json(data);
   } catch (error) {
     console.error(
-      "Erreur lors de la récupération des catégories de produits (Axios):",
-      error.response ? error.response.data : error.message
+      "Erreur lors de la récupération des catégories de produits:",
+      error.response?.data || error.message
     );
-    res.status(error.response ? error.response.status : 500).json({
+    res.status(error.response?.status || 500).json({
       error: "Erreur lors de la récupération des catégories de produits",
-      details: error.response ? error.response.data : error.message,
+      details: error.response?.data || error.message,
     });
   }
 });
@@ -364,13 +380,16 @@ app.get("/api/product-categories", async (req, res) => {
 // --- Endpoint pour récupérer les catégories de médias (attachment_category) ---
 app.get("/api/media_category", async (req, res) => {
   try {
-    const response = await axios.get(`${WP_API_URL}/wp/v2/attachment_category`, {
-      params: req.query, // Passer les paramètres de requête du frontend
-      auth: {
-        username: WP_USERNAME,
-        password: WP_PASSWORD,
-      },
-    });
+    const response = await axios.get(
+      `${WP_API_URL}/wp/v2/attachment_category`,
+      {
+        params: req.query, // Passer les paramètres de requête du frontend
+        auth: {
+          username: WP_USERNAME,
+          password: WP_PASSWORD,
+        },
+      }
+    );
     res.status(200).json(response.data);
   } catch (error) {
     console.error(
@@ -460,21 +479,30 @@ app.put("/api/media/:mediaId", async (req, res) => {
   const { attachment_category } = req.body; // Récupère le tableau d'IDs de catégories
 
   if (!Array.isArray(attachment_category)) {
-    return res.status(400).json({ error: "Le corps de la requête doit contenir un tableau 'attachment_category'." });
+    return res
+      .status(400)
+      .json({
+        error:
+          "Le corps de la requête doit contenir un tableau 'attachment_category'.",
+      });
   }
 
   try {
-    const response = await axios.post(`${WP_API_URL}/wp/v2/media/${mediaId}`, {
-      attachment_category: attachment_category,
-    }, {
-      headers: {
-        'Content-Type': 'application/json',
+    const response = await axios.post(
+      `${WP_API_URL}/wp/v2/media/${mediaId}`,
+      {
+        attachment_category: attachment_category,
       },
-      auth: {
-        username: WP_USERNAME,
-        password: WP_PASSWORD,
-      },
-    });
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+        auth: {
+          username: WP_USERNAME,
+          password: WP_PASSWORD,
+        },
+      }
+    );
     res.status(200).json(response.data);
   } catch (error) {
     console.error(
@@ -493,12 +521,15 @@ app.delete("/api/media/:mediaId", async (req, res) => {
   const mediaId = req.params.mediaId;
 
   try {
-    const response = await axios.delete(`${WP_API_URL}/wp/v2/media/${mediaId}?force=true`, {
-      auth: {
-        username: WP_USERNAME,
-        password: WP_PASSWORD,
-      },
-    });
+    const response = await axios.delete(
+      `${WP_API_URL}/wp/v2/media/${mediaId}?force=true`,
+      {
+        auth: {
+          username: WP_USERNAME,
+          password: WP_PASSWORD,
+        },
+      }
+    );
     res.status(200).json(response.data);
   } catch (error) {
     console.error(
@@ -550,31 +581,54 @@ app.get("/api/media/category/:slug", async (req, res) => {
 // Nouvel Endpoint pour les Variations de Produit (GET `/products/{product_id}/variations`)
 app.get("/api/products/:product_id/variations", async (req, res) => {
   const productId = req.params.product_id;
-  console.log(`Backend: Received request to fetch variations for product ID: ${productId}`);
+  console.log(
+    `Backend: Received request to fetch variations for product ID: ${productId}`
+  );
 
   try {
-    const wooCommerceVariationsUrl = `${process.env.WOO_API_URL}/wp-json/wc/v3/products/${productId}/variations`;
-    console.log(
-      "Backend: Attempting to fetch product variations from WooCommerce URL:",
-      wooCommerceVariationsUrl
-    );
-    const response = await axios.get(wooCommerceVariationsUrl, {
-      auth: {
-        username: process.env.WOO_CONSUMER_KEY,
-        password: process.env.WOO_CONSUMER_SECRET,
-      },
-    });
+    const { data } = await wooApi.get(`products/${productId}/variations`);
     console.log(
       `Backend: Successfully fetched variations for product ID: ${productId}.`
     );
+    res.status(200).json(data);
+  } catch (error) {
+    console.error(
+      `Backend: Erreur lors de la récupération des variations pour le produit ${productId}:`,
+      error.response?.data || error.message
+    );
+    res.status(error.response?.status || 500).json({
+      error: `Erreur lors de la récupération des variations pour le produit ${productId}`,
+      details: error.response?.data || error.message,
+    });
+  }
+});
+
+// Nouvelle route pour récupérer les produits mis en avant (featured products)
+app.get("/api/featured-product", async (req, res) => {
+  console.log("Backend: Received request to fetch featured products.");
+  try {
+    const customFeaturedProductsUrl = `${process.env.WOO_API_URL}/wp-json/custom/v1/featured-product`;
+    console.log(
+      "Backend: Attempting to fetch featured products from custom WordPress URL:",
+      customFeaturedProductsUrl
+    );
+    console.log("Backend: Making Axios GET request to:", customFeaturedProductsUrl);
+    const response = await axios.get(customFeaturedProductsUrl, {
+      auth: {
+        username: process.env.WP_USERNAME,
+        password: process.env.WP_PASSWORD,
+      },
+    });
+    console.log("Backend: Axios GET request successful. Status:", response.status);
+    console.log("Backend: Successfully fetched featured products from custom WordPress API.");
     res.status(200).json(response.data);
   } catch (error) {
     console.error(
-      `Backend: Erreur lors de la récupération des variations pour le produit ${productId} (Axios):`,
+      "Backend: Erreur lors de la récupération des produits mis en avant (Axios):",
       error.response ? error.response.data : error.message
     );
     res.status(error.response ? error.response.status : 500).json({
-      error: `Erreur lors de la récupération des variations pour le produit ${productId}`,
+      error: "Erreur lors de la récupération des produits mis en avant",
       details: error.response ? error.response.data : error.message,
     });
   }
