@@ -607,7 +607,7 @@ app.get("/api/products/:product_id/variations", async (req, res) => {
 app.get("/api/featured-product", async (req, res) => {
   console.log("Backend: Received request to fetch featured products.");
   try {
-    const { data } = await wooApi.get("products", { featured: true, ...req.query });
+    const { data } = await wooApi.get("products", { is_featured_product: true, ...req.query });
     console.log("Backend: Successfully fetched featured products from WooCommerce API.");
     res.status(200).json(data);
   } catch (error) {
