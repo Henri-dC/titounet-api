@@ -353,30 +353,6 @@ app.get("/api/product-categories", async (req, res) => {
   }
 });
 
-// --- Endpoint pour récupérer les catégories de produits WooCommerce (avec Axios) ---
-app.get("/api/product-categories", async (req, res) => {
-  try {
-    const params = { ...req.query };
-    if (params.per_page) {
-      params.per_page = parseInt(params.per_page, 10);
-    }
-    if (params.page) {
-      params.page = parseInt(params.page, 10);
-    }
-    const { data } = await wooApi.get("products/categories", params);
-    res.status(200).json(data);
-  } catch (error) {
-    console.error(
-      "Erreur lors de la récupération des catégories de produits:",
-      error.response?.data || error.message
-    );
-    res.status(error.response?.status || 500).json({
-      error: "Erreur lors de la récupération des catégories de produits",
-      details: error.response?.data || error.message,
-    });
-  }
-});
-
 // --- Endpoint pour récupérer les catégories de médias (attachment_category) ---
 app.get("/api/media_category", async (req, res) => {
   try {
@@ -604,10 +580,10 @@ app.get("/api/products/:product_id/variations", async (req, res) => {
 });
 
 // Nouvelle route pour récupérer les produits mis en avant (featured products)
-app.get("/api/featured-product", async (req, res) => {
+app.get("/api/products/featured", async (req, res) => {
   console.log("Backend: Received request to fetch featured products.");
   try {
-    const { data } = await wooApi.get("products", { is_featured_product: true, ...req.query });
+    const { data } = await wooApi.get("products", { featured: true, ...req.query });
     console.log("Backend: Successfully fetched featured products from WooCommerce API.");
     res.status(200).json(data);
   } catch (error) {
