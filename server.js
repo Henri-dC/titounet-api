@@ -689,6 +689,36 @@ app.post("/api/titounet/v1/featured-instagram", async (req, res) => {
   }
 });
 
+app.get("/api/instagram/media", async (req, res) => {
+  const userId = req.query.userId;
+  const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN;
+
+  if (!userId) {
+    return res.status(400).json({ error: "User ID is required." });
+  }
+
+  if (!accessToken) {
+    console.error("INSTAGRAM_ACCESS_TOKEN is not set in environment variables.");
+    return res.status(500).json({ error: "Instagram Access Token is not configured on the server." });
+  }
+
+  const url = `https://graph.instagram.com/${userId}/media?fields=id,caption,media_type,media_url,permalink&access_token=${accessToken}`;
+
+  try {
+    const response = await axios.get(url);
+    res.status(200).json(response.data);
+  } catch (error) {
+    console.error(
+      "Backend: Erreur lors de la récupération des médias Instagram:",
+      error.response ? error.response.data : error.message
+    );
+    res.status(error.response?.status || 500).json({
+      error: "Erreur lors de la récupération des médias Instagram",
+      details: error.response ? error.response.data : error.message,
+    });
+  }
+});
+
 // Démarrage du serveur
 try {
   const server = app.listen(PORT, () => {
