@@ -24,6 +24,7 @@ const requiredEnvVars = [
   "MAILJET_API_KEY",
   "MAILJET_SECRET_KEY",
   "MAIL_FROM",
+  "MAIL_TO_ADMIN",
   "ADMIN_USERNAME",
   "ADMIN_PASSWORD",
 ];
@@ -130,6 +131,47 @@ app.post("/api/orders", async (req, res) => {
       }
       console.log("Email de confirmation envoyé avec succès:", info.response);
     });
+
+    // Envoyer l'email de notification à l'administrateur
+    console.log("Attempting to send admin notification email...");
+    const adminMailOptions = {
+      from: process.env.MAIL_FROM,
+      to: process.env.MAIL_TO_ADMIN,
+      subject: `Nouvelle commande #${orderResponse.id}`,
+      html: `
+        <h1>Une nouvelle commande a été passée sur Titounet !</h1>
+        <p>Commande #${orderResponse.id}</p>
+        <p>Client: ${orderData.billing.first_name} ${orderData.billing.last_name} (${orderData.billing.email})</p>
+        <p>Détails de la commande:</p>
+        <ul>
+          ${(orderResponse.line_items || [])
+            .map(
+              (item) =>
+                `<li>${item.name} (x${item.quantity}) - ${item.total} €</li>`
+            )
+            .join("")}
+        </ul>
+        <p>Total: ${orderResponse.total} €</p>
+        <p>Adresse de livraison:</p>
+        <p>
+          ${orderData.shipping.first_name} ${orderData.shipping.last_name}<br>
+          ${orderData.shipping.address_1}<br>
+          ${orderData.shipping.postcode} ${orderData.shipping.city}<br>
+          ${orderData.shipping.country}
+        </p>
+      `,
+    };
+
+    transporter.sendMail(adminMailOptions, (adminEmailError, adminInfo) => {
+      if (adminEmailError) {
+        console.error(
+          "Erreur lors de l'envoi de l'email de notification à l'administrateur:",
+          adminEmailError
+        );
+        return;
+      }
+      console.log("Email de notification administrateur envoyé avec succès:", adminInfo.response);
+    });
   } catch (error) {
     console.error(
       "Erreur WooCommerce lors de la création de commande:",
@@ -138,6 +180,33 @@ app.post("/api/orders", async (req, res) => {
     );
     res.status(500).json({
       error: "Erreur lors de la création de la commande",
+      details: error.response?.data || error.message,
+    });
+  }
+});
+
+// Endpoint pour récupérer les commandes WooCommerce
+app.get("/api/orders", async (req, res) => {
+  console.log("Backend: Received request to fetch orders.");
+  try {
+    const params = { ...req.query };
+    // Assurer la pagination si nécessaire
+    if (params.per_page) {
+      params.per_page = parseInt(params.per_page, 10);
+    }
+    if (params.page) {
+      params.page = parseInt(params.page, 10);
+    }
+    const { data } = await wooApi.get("orders", params);
+    console.log("Backend: Successfully fetched orders from WooCommerce.");
+    res.status(200).json(data);
+  } catch (error) {
+    console.error(
+      "Backend: Erreur lors de la récupération des commandes:",
+      error.response?.data || error.message
+    );
+    res.status(error.response?.status || 500).json({
+      error: "Erreur lors de la récupération des commandes",
       details: error.response?.data || error.message,
     });
   }
