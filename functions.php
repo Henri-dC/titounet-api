@@ -216,3 +216,67 @@ function update_featured_instagram_posts($request)
 
     return new WP_REST_Response(array('status' => 'success', 'post_ids' => $sanitized_post_ids), 200);
 }
+
+add_action('admin_enqueue_scripts', function () {
+    wp_add_inline_script('jquery-core', '
+        if (typeof _ !== "undefined") {
+            if (typeof _.pluck === "undefined") {
+                _.pluck = function(obj, key) { return _.map(obj, key); };
+            }
+            if (typeof _.all === "undefined") {
+                _.all = _.every;
+            }
+        }
+    ');
+});
+
+function titounet_register_rest_routes()
+{
+    register_rest_route('titounet/v1', '/admin/options/order-summary-note', array(
+        'methods'             => 'GET',
+        'callback'            => 'titounet_get_order_summary_note_callback',
+        'permission_callback' => 'titounet_admin_permission_callback',
+    ));
+
+    register_rest_route('titounet/v1', '/admin/options/order-summary-note', array(
+        'methods'             => 'POST',
+        'callback'            => 'titounet_update_order_summary_note_callback',
+        'permission_callback' => 'titounet_admin_permission_callback',
+    ));
+}
+add_action('rest_api_init', 'titounet_register_rest_routes');
+
+/**
+ * Récupère la valeur de l'option 'titounet_order_summary_note'.
+ *
+ * @param WP_REST_Request $request
+ * @return WP_REST_Response
+ */
+function titounet_get_order_summary_note_callback(WP_REST_Request $request)
+{
+    $note = get_option('titounet_order_summary_note', '');
+    return new WP_REST_Response(array('success' => true, 'note' => $note), 200);
+}
+
+/**
+ * Met à jour la valeur de l'option 'titounet_order_summary_note'.
+ *
+ * @param WP_REST_Request $request
+ * @return WP_REST_Response
+ */
+function titounet_update_order_summary_note_callback(WP_REST_Request $request)
+{
+    $new_note = sanitize_textarea_field($request->get_param('note'));
+    update_option('titounet_order_summary_note', $new_note);
+    return new WP_REST_Response(array('success' => true, 'message' => 'Note mise à jour avec succès.'), 200);
+}
+
+/**
+ * Vérifie si l'utilisateur a la capacité de gérer les options.
+ *
+ * @return bool
+ */
+function titounet_admin_permission_callback()
+{
+    return current_user_can('manage_options');
+}

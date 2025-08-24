@@ -704,6 +704,31 @@ app.get("/api/articles/:id", async (req, res) => {
   }
 });
 
+// New Endpoint for WordPress Pages
+app.get("/api/pages/:id", async (req, res) => {
+  console.log("Backend: Received request to fetch single page.");
+  try {
+    const pageId = req.params.id;
+    const response = await axios.get(`${WP_API_URL}/wp/v2/pages/${pageId}`, {
+      params: req.query,
+      auth: {
+        username: WP_USERNAME,
+        password: WP_PASSWORD,
+      },
+    });
+    res.status(200).json(response.data);
+  } catch (error) {
+    console.error(
+      "Backend: Erreur lors de la récupération de la page (Axios):",
+      error.response ? error.response.data : error.message
+    );
+    res.status(error.response?.status || 500).json({
+      error: "Erreur lors de la récupération de la page",
+      details: error.response ? error.response.data : error.message,
+    });
+  }
+});
+
 // --- Endpoints Instagram ---
 app.get("/api/titounet/v1/featured-instagram", async (req, res) => {
   try {
@@ -787,6 +812,107 @@ app.get("/api/instagram/media", async (req, res) => {
     });
   }
 });
+
+// --- Endpoints Paramètres ---
+app.get("/api/settings/order-summary-note", async (req, res) => {
+  console.log("Backend: Received request to fetch order summary note.");
+  try {
+    const response = await axios.get(
+      `${WP_API_URL}/titounet/v1/admin/options/order-summary-note`, // New custom endpoint
+      {
+        auth: {
+          username: WP_USERNAME,
+          password: WP_PASSWORD,
+        },
+      }
+    );
+    // The new PHP endpoint returns { value: '...' }, so we pass that directly
+    res.status(200).json(response.data);
+  } catch (error) {
+    console.error(
+      "Backend: Erreur lors de la récupération de la note de résumé de commande (Axios):",
+      error.response ? error.response.data : error.message
+    );
+    res.status(error.response?.status || 500).json({
+      error: "Erreur lors de la récupération de la note de résumé de commande",
+      details: error.response ? error.response.data : error.message,
+    });
+  }
+});
+
+app.post("/api/settings/order-summary-note", async (req, res) => {
+  console.log("Backend: Received request to update order summary note.");
+  const { note } = req.body; // Expecting the note in 'note' property
+
+  if (!note) { // Check for 'note'
+    return res.status(400).json({ error: "Le contenu de la note est requis." });
+  }
+
+  try {
+    const response = await axios.post( // Changed to axios.post
+      `${WP_API_URL}/titounet/v1/admin/options/order-summary-note`, // Correct endpoint
+      { note: note }, // Send 'note' as expected by PHP endpoint
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+        auth: {
+          username: WP_USERNAME,
+          password: WP_PASSWORD,
+        },
+      }
+    );
+    res.status(200).json(response.data);
+  } catch (error) {
+    console.error(
+      "Backend: Erreur lors de la mise à jour de la note de résumé de commande (Axios):",
+      error.response ? error.response.data : error.message
+    );
+    res.status(error.response?.status || 500).json({
+      error: "Erreur lors de la mise à jour de la note de résumé de commande",
+      details: error.response ? error.response.data : error.message,
+    });
+  }
+});
+
+// --- Contact Form Endpoint ---
+app.post("/api/contact", async (req, res) => {
+  console.log("Backend: Received contact form submission.");
+  const { name, email, inquiryType, subject, message } = req.body;
+
+  if (!name || !email || !inquiryType || !subject || !message) {
+    return res.status(400).json({ error: "Tous les champs sont requis." });
+  }
+
+  const mailOptions = {
+    from: process.env.MAIL_FROM,
+    to: process.env.MAIL_TO_ADMIN, // Send to admin email
+    subject: `[Contact Titounet - ${inquiryType}] ${subject}`,
+    html: `
+      <h1>Nouveau message de contact</h1>
+      <p><strong>Nom:</strong> ${name}</p>
+      <p><strong>Email:</strong> ${email}</p>
+      <p><strong>Type de demande:</strong> ${inquiryType}</p>
+      <p><strong>Sujet:</strong> ${subject}</p>
+      <p><strong>Message:</strong></p>
+      <p>${message}</p>
+    `,
+  };
+
+  // Send the response immediately, then send the email in the background
+  res.status(200).json({ message: "Message envoyé avec succès." }); // <--- Send response first
+
+  transporter.sendMail(mailOptions, (error, info) => { // <--- Send email asynchronously
+    if (error) {
+      console.error(
+        "Backend: Erreur lors de l'envoi de l'email de contact en arrière-plan:",
+        error
+      );
+    } else {
+      console.log("Backend: Email de contact envoyé avec succès:", info.response);
+    }
+  });
+}); // <--- ADD THIS CLOSING BRACE
 
 // Démarrage du serveur
 try {
