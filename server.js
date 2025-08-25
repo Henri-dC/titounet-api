@@ -5,7 +5,7 @@ const WooCommerceRestApi = require("@woocommerce/woocommerce-rest-api").default;
 const axios = require("axios");
 const multer = require("multer");
 const FormData = require("form-data");
-const nodemailer = require("nodemailer");
+const Mailjet = require('node-mailjet');
 
 process.on("uncaughtException", (err) => {
   console.error("🚨 Uncaught Exception:", err);
@@ -54,21 +54,19 @@ const wooApi = new WooCommerceRestApi({
   version: "wc/v3",
 });
 
-// Nodemailer transporter setup
-const MailjetTransport = require("nodemailer-mailjet-transport");
-const transporter = nodemailer.createTransport(
-  MailjetTransport({
-    auth: {
-      apiKey: process.env.MAILJET_API_KEY,
-      apiSecret: process.env.MAILJET_SECRET_KEY,
-    },
-  })
-);
+// Mailjet setup
+const mailjet = new Mailjet({
+  apiKey: process.env.MAILJET_API_KEY,
+  apiSecret: process.env.MAILJET_SECRET_KEY
+});
 
 // Configuration de l'API WordPress (pour les articles et médias)
 const WP_API_URL = `${process.env.WOO_API_URL}/wp-json`;
 const WP_USERNAME = process.env.WP_USERNAME;
 const WP_PASSWORD = process.env.WP_PASSWORD;
+
+console.log(`WOO_API_URL: ${process.env.WOO_API_URL}`);
+console.log(`WP_API_URL: ${WP_API_URL}`);
 
 // Configuration de Multer pour l'upload de fichiers
 const upload = multer({ storage: multer.memoryStorage() });
@@ -121,16 +119,38 @@ app.post("/api/orders", async (req, res) => {
       `,
     };
 
-    transporter.sendMail(mailOptions, (emailError, info) => {
-      if (emailError) {
+    const request = mailjet
+      .post('send', { version: 'v3.1' })
+      .request({
+        Messages: [
+          {
+            From: {
+              Email: process.env.MAIL_FROM,
+              Name: "Titounet"
+            },
+            To: [
+              {
+                Email: orderData.billing.email,
+                Name: `${orderData.billing.first_name} ${orderData.billing.last_name}`
+              }
+            ],
+            Subject: mailOptions.subject,
+            TextPart: "",
+            HTMLPart: mailOptions.html
+          }
+        ]
+      });
+
+    request
+      .then((result) => {
+        console.log("Email de confirmation envoyé avec succès:", result.body);
+      })
+      .catch((err) => {
         console.error(
           "Erreur lors de l'envoi de l'email de confirmation en arrière-plan:",
-          emailError
+          err.statusCode, err.message
         );
-        return;
-      }
-      console.log("Email de confirmation envoyé avec succès:", info.response);
-    });
+      });
 
     // Envoyer l'email de notification à l'administrateur
     console.log("Attempting to send admin notification email...");
@@ -162,16 +182,38 @@ app.post("/api/orders", async (req, res) => {
       `,
     };
 
-    transporter.sendMail(adminMailOptions, (adminEmailError, adminInfo) => {
-      if (adminEmailError) {
+    const adminRequest = mailjet
+      .post('send', { version: 'v3.1' })
+      .request({
+        Messages: [
+          {
+            From: {
+              Email: process.env.MAIL_FROM,
+              Name: "Titounet"
+            },
+            To: [
+              {
+                Email: process.env.MAIL_TO_ADMIN
+              }
+            ],
+            Subject: adminMailOptions.subject,
+            TextPart: "",
+            HTMLPart: adminMailOptions.html
+          }
+        ]
+      });
+
+      adminRequest
+      .then((result) => {
+        console.log("Email de notification administrateur envoyé avec succès:", result.body);
+      })
+      .catch((err) => {
         console.error(
           "Erreur lors de l'envoi de l'email de notification à l'administrateur:",
-          adminEmailError
+          err.statusCode, err.message
         );
-        return;
-      }
-      console.log("Email de notification administrateur envoyé avec succès:", adminInfo.response);
-    });
+      });
+
   } catch (error) {
     console.error(
       "Erreur WooCommerce lors de la création de commande:",
@@ -674,7 +716,7 @@ app.get("/api/articles", async (req, res) => {
       "Backend: Erreur lors de la récupération des articles (Axios):",
       error.response ? error.response.data : error.message
     );
-    res.status(error.response ? error.response.status : 500).json({
+    res.status(error.response?.status || 500).json({
       error: "Erreur lors de la récupération des articles",
       details: error.response ? error.response.data : error.message,
     });
@@ -697,7 +739,7 @@ app.get("/api/articles/:id", async (req, res) => {
       "Backend: Erreur lors de la récupération de l'article (Axios):",
       error.response ? error.response.data : error.message
     );
-    res.status(error.response ? error.response.status : 500).json({
+    res.status(error.response?.status || 500).json({
       error: "Erreur lors de la récupération de l'article",
       details: error.response ? error.response.data : error.message,
     });
@@ -776,7 +818,7 @@ app.post("/api/titounet/v1/featured-instagram", async (req, res) => {
       "Backend: Erreur lors de la mise à jour des posts Instagram favoris (Axios):",
       error.response ? error.response.data : error.message
     );
-    res.status(error.response ? error.response.status : 500).json({
+    res.status(error.response?.status || 500).json({
       error: "Erreur lors de la mise à jour des posts Instagram favoris",
       details: error.response ? error.response.data : error.message,
     });
@@ -902,16 +944,37 @@ app.post("/api/contact", async (req, res) => {
   // Send the response immediately, then send the email in the background
   res.status(200).json({ message: "Message envoyé avec succès." }); // <--- Send response first
 
-  transporter.sendMail(mailOptions, (error, info) => { // <--- Send email asynchronously
-    if (error) {
+  const request = mailjet
+    .post('send', { version: 'v3.1' })
+    .request({
+      Messages: [
+        {
+          From: {
+            Email: process.env.MAIL_FROM,
+            Name: "Titounet"
+          },
+          To: [
+            {
+              Email: process.env.MAIL_TO_ADMIN
+            }
+          ],
+          Subject: mailOptions.subject,
+          TextPart: "",
+          HTMLPart: mailOptions.html
+        }
+      ]
+    });
+
+  request
+    .then((result) => {
+      console.log("Backend: Email de contact envoyé avec succès:", result.body);
+    })
+    .catch((err) => {
       console.error(
         "Backend: Erreur lors de l'envoi de l'email de contact en arrière-plan:",
-        error
+        err.statusCode, err.message
       );
-    } else {
-      console.log("Backend: Email de contact envoyé avec succès:", info.response);
-    }
-  });
+    });
 }); // <--- ADD THIS CLOSING BRACE
 
 // Démarrage du serveur
