@@ -343,7 +343,7 @@ app.get("/api/products/:id", async (req, res) => {
   console.log("Backend: Received request to fetch single product.");
   try {
     const productId = req.params.id;
-    const { data } = await wooApi.get(`products/${productId}`);
+    const { data } = await wooApi.get(`products/${productId}`, req.query);
     console.log(
       "Backend: Successfully fetched single product from WooCommerce."
     );
@@ -570,6 +570,29 @@ app.get("/api/media", async (req, res) => {
     );
     res.status(error.response ? error.response.status : 500).json({
       error: "Erreur lors de la récupération des médias",
+      details: error.response ? error.response.data : error.message,
+    });
+  }
+});
+
+app.get("/api/media/:id", async (req, res) => {
+  try {
+    const mediaId = req.params.id;
+    const response = await axios.get(`${WP_API_URL}/wp/v2/media/${mediaId}`, {
+      params: req.query,
+      auth: {
+        username: WP_USERNAME,
+        password: WP_PASSWORD,
+      },
+    });
+    res.status(200).json(response.data);
+  } catch (error) {
+    console.error(
+      "Backend: Erreur lors de la récupération du média (Axios):",
+      error.response ? error.response.data : error.message
+    );
+    res.status(error.response ? error.response.status : 500).json({
+      error: "Erreur lors de la récupération du média",
       details: error.response ? error.response.data : error.message,
     });
   }
