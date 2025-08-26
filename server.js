@@ -6,6 +6,34 @@ const axios = require("axios");
 const multer = require("multer");
 const FormData = require("form-data");
 const Mailjet = require('node-mailjet');
+const sharp = require('sharp');
+
+const cache = new Map(); // Stores cached responses
+const DEFAULT_TTL = 60 * 5 * 1000; // Default TTL: 5 minutes in milliseconds
+
+function cacheMiddleware(req, res, next) {
+  const key = req.originalUrl; // Use the full URL as the cache key
+
+  if (cache.has(key)) {
+    const cachedData = cache.get(key);
+    if (Date.now() < cachedData.expiry) {
+      console.log(`Serving from cache: ${key}`);
+      return res.json(cachedData.data);
+    } else {
+      console.log(`Cache expired for: ${key}`);
+      cache.delete(key); // Remove expired item
+    }
+  }
+
+  // If not in cache or expired, proceed with the request
+  res.sendResponse = res.json; // Store original json function
+  res.json = (body) => {
+    console.log(`Caching response for: ${key}`);
+    cache.set(key, { data: body, expiry: Date.now() + DEFAULT_TTL });
+    res.sendResponse(body);
+  };
+  next();
+}
 
 process.on("uncaughtException", (err) => {
   console.error("🚨 Uncaught Exception:", err);
@@ -291,7 +319,7 @@ app.post("/api/products", async (req, res) => {
   }
 });
 
-app.get("/api/products", async (req, res) => {
+app.get("/api/products", cacheMiddleware, async (req, res) => {
   console.log("Backend: Received request to fetch products.");
   try {
     const params = { ...req.query };
@@ -316,7 +344,7 @@ app.get("/api/products", async (req, res) => {
   }
 });
 
-app.get("/api/products/featured", async (req, res) => {
+app.get("/api/products/featured", cacheMiddleware, async (req, res) => {
   console.log("Backend: Received request to fetch featured products.");
   try {
     const { data } = await wooApi.get("products", {
@@ -339,7 +367,7 @@ app.get("/api/products/featured", async (req, res) => {
   }
 });
 
-app.get("/api/products/:id", async (req, res) => {
+app.get("/api/products/:id", cacheMiddleware, async (req, res) => {
   console.log("Backend: Received request to fetch single product.");
   try {
     const productId = req.params.id;
@@ -399,7 +427,7 @@ app.delete("/api/products/:id", async (req, res) => {
   }
 });
 
-app.get("/api/products/:product_id/variations", async (req, res) => {
+app.get("/api/products/:product_id/variations", cacheMiddleware, async (req, res) => {
   const productId = req.params.product_id;
   console.log(
     `Backend: Received request to fetch variations for product ID: ${productId}`
@@ -448,7 +476,7 @@ app.post("/api/products/:product_id/variations", async (req, res) => {
   }
 });
 
-app.get("/api/products/attributes/:attribute_id/terms", async (req, res) => {
+app.get("/api/products/attributes/:attribute_id/terms", cacheMiddleware, async (req, res) => {
   const attributeId = req.params.attribute_id;
   console.log(
     `Backend: Received request to fetch terms for attribute ID: ${attributeId}`
@@ -499,7 +527,7 @@ app.delete("/api/products/:product_id/variations/:variation_id", async (req, res
 });
 
 // --- Endpoints Catégories ---
-app.get("/api/product-categories", async (req, res) => {
+app.get("/api/product-categories", cacheMiddleware, async (req, res) => {
   try {
     const params = { ...req.query };
     if (params.per_page) {
@@ -553,7 +581,7 @@ app.post("/api/media", upload.single("file"), async (req, res) => {
   }
 });
 
-app.get("/api/media", async (req, res) => {
+app.get("/api/media", cacheMiddleware, async (req, res) => {
   try {
     const response = await axios.get(`${WP_API_URL}/wp/v2/media`, {
       params: req.query,
@@ -575,7 +603,7 @@ app.get("/api/media", async (req, res) => {
   }
 });
 
-app.get("/api/media/:id", async (req, res) => {
+app.get("/api/media/:id", cacheMiddleware, async (req, res) => {
   try {
     const mediaId = req.params.id;
     const response = await axios.get(`${WP_API_URL}/wp/v2/media/${mediaId}`, {
@@ -585,7 +613,27 @@ app.get("/api/media/:id", async (req, res) => {
         password: WP_PASSWORD,
       },
     });
-    res.status(200).json(response.data);
+
+    const mediaData = response.data;
+
+    // Generate blurred placeholder if it's an image and has a source_url
+    if (mediaData.media_details && mediaData.media_details.sizes && mediaData.media_details.sizes.full && mediaData.media_details.sizes.full.source_url) {
+      try {
+        const imageUrl = mediaData.media_details.sizes.full.source_url;
+        const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+        const blurredBuffer = await sharp(imageResponse.data)
+          .resize(20, 20) // Tiny size
+          .blur(1) // Apply a slight blur
+          .jpeg({ quality: 50 }) // Compress as JPEG
+          .toBuffer();
+        mediaData.placeholder_url = `data:image/jpeg;base64,${blurredBuffer.toString('base64')}`;
+      } catch (placeholderError) {
+        console.error(`Error generating placeholder for media ${mediaId}:`, placeholderError.message);
+        // Fallback: do not add placeholder_url if generation fails
+      }
+    }
+
+    res.status(200).json(mediaData);
   } catch (error) {
     console.error(
       "Backend: Erreur lors de la récupération du média (Axios):",
@@ -598,7 +646,7 @@ app.get("/api/media/:id", async (req, res) => {
   }
 });
 
-app.get("/api/media_category", async (req, res) => {
+app.get("/api/media_category", cacheMiddleware, async (req, res) => {
   try {
     const response = await axios.get(
       `${WP_API_URL}/wp/v2/attachment_category`,
@@ -623,7 +671,7 @@ app.get("/api/media_category", async (req, res) => {
   }
 });
 
-app.get("/api/media/category/:slug", async (req, res) => {
+app.get("/api/media/category/:slug", cacheMiddleware, async (req, res) => {
   const categorySlug = req.params.slug;
 
   if (!categorySlug) {
@@ -724,7 +772,7 @@ app.delete("/api/media/:mediaId", async (req, res) => {
 });
 
 // --- Endpoints Articles ---
-app.get("/api/articles", async (req, res) => {
+app.get("/api/articles", cacheMiddleware, async (req, res) => {
   try {
     const response = await axios.get(`${WP_API_URL}/wp/v2/posts`, {
       params: req.query,
@@ -746,7 +794,7 @@ app.get("/api/articles", async (req, res) => {
   }
 });
 
-app.get("/api/articles/:id", async (req, res) => {
+app.get("/api/articles/:id", cacheMiddleware, async (req, res) => {
   try {
     const articleId = req.params.id;
     const response = await axios.get(`${WP_API_URL}/wp/v2/posts/${articleId}`, {
@@ -770,7 +818,7 @@ app.get("/api/articles/:id", async (req, res) => {
 });
 
 // New Endpoint for WordPress Pages
-app.get("/api/pages/:id", async (req, res) => {
+app.get("/api/pages/:id", cacheMiddleware, async (req, res) => {
   console.log("Backend: Received request to fetch single page.");
   try {
     const pageId = req.params.id;
@@ -795,7 +843,7 @@ app.get("/api/pages/:id", async (req, res) => {
 });
 
 // --- Endpoints Instagram ---
-app.get("/api/titounet/v1/featured-instagram", async (req, res) => {
+app.get("/api/titounet/v1/featured-instagram", cacheMiddleware, async (req, res) => {
   try {
     const response = await axios.get(`${WP_API_URL}/titounet/v1/featured-instagram`, {
       params: req.query,
@@ -848,9 +896,12 @@ app.post("/api/titounet/v1/featured-instagram", async (req, res) => {
   }
 });
 
-app.get("/api/instagram/media", async (req, res) => {
+app.get("/api/instagram/media", cacheMiddleware, async (req, res) => {
   const userId = req.query.userId;
   const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN;
+  const postIdsParam = req.query.postIds; // Get postIds from query
+  const featuredIds = postIdsParam ? postIdsParam.split(',') : []; // Split into array
+
 
   if (!userId) {
     return res.status(400).json({ error: "User ID is required." });
@@ -861,11 +912,62 @@ app.get("/api/instagram/media", async (req, res) => {
     return res.status(500).json({ error: "Instagram Access Token is not configured on the server." });
   }
 
-  const url = `https://graph.instagram.com/${userId}/media?fields=id,caption,media_type,media_url,permalink&access_token=${accessToken}`;
+  const url = `https://graph.instagram.com/${userId}/media?fields=id,caption,media_type,media_url,permalink,children{id,media_type,media_url}&access_token=${accessToken}`;
 
   try {
     const response = await axios.get(url);
-    res.status(200).json(response.data);
+    let instagramPosts = response.data.data;
+
+    // Filter posts based on featuredIds BEFORE processing
+    if (featuredIds.length > 0) {
+      instagramPosts = instagramPosts.filter(post => featuredIds.includes(post.id));
+    }
+
+    const processedPosts = await Promise.all(instagramPosts.map(async (post) => {
+      if (post.media_type === 'IMAGE' && post.media_url) {
+        try {
+          const imageResponse = await axios.get(post.media_url, { responseType: 'arraybuffer' });
+          const image = sharp(imageResponse.data);
+          const metadata = await image.metadata();
+          console.log(`Original image ${post.id} dimensions: ${metadata.width}x${metadata.height}`);
+          const resizedImageBuffer = await image
+            .resize(200, 200)
+            .toBuffer();
+          const resizedBase64 = `data:image/jpeg;base64,${resizedImageBuffer.toString('base64')}`;
+          console.log(`Resized image ${post.id} to 200x200.`);
+          return { ...post, resized_media_url: resizedBase64 };
+        } catch (resizeError) {
+          console.error(`Error resizing Instagram image ${post.id}:`, resizeError.message, resizeError.stack);
+          return { ...post, resized_media_url: post.media_url }; // Fallback to original
+        }
+      } else if (post.media_type === 'CAROUSEL_ALBUM' && post.children && post.children.data) {
+        const resizedChildren = await Promise.all(post.children.data.map(async (child) => {
+          if (child.media_type === 'IMAGE' && child.media_url) {
+            try {
+              const childImageResponse = await axios.get(child.media_url, { responseType: 'arraybuffer' });
+              const childImage = sharp(childImageResponse.data);
+              const childMetadata = await childImage.metadata();
+              console.log(`Original child image ${child.id} dimensions: ${childMetadata.width}x${childMetadata.height}`);
+              const resizedChildImageBuffer = await childImage
+                .resize(200, 200)
+                .toBuffer();
+              const resizedChildBase64 = `data:image/jpeg;base64,${resizedChildImageBuffer.toString('base64')}`;
+              console.log(`Resized child image ${child.id} to 200x200.`);
+              return { ...child, resized_media_url: resizedChildBase64 };
+            } catch (childResizeError) {
+              console.error(`Error resizing Instagram child image ${child.id}:`, childResizeError.message, childResizeError.stack);
+              return { ...child, resized_media_url: child.media_url }; // Fallback to original
+            }
+          }
+          return child; // Return original child if not an image or no media_url
+        }));
+        return { ...post, resized_children: resizedChildren };
+      }
+      return post; // Return original post if not an image or no media_url
+    }));
+
+    console.log("Processed Posts before sending:", processedPosts);
+    res.status(200).json({ data: processedPosts });
   } catch (error) {
     console.error(
       "Backend: Erreur lors de la récupération des médias Instagram:",
@@ -879,7 +981,7 @@ app.get("/api/instagram/media", async (req, res) => {
 });
 
 // --- Endpoints Paramètres ---
-app.get("/api/settings/order-summary-note", async (req, res) => {
+app.get("/api/settings/order-summary-note", cacheMiddleware, async (req, res) => {
   console.log("Backend: Received request to fetch order summary note.");
   try {
     const response = await axios.get(
