@@ -7,6 +7,7 @@ const multer = require("multer");
 const FormData = require("form-data");
 const Mailjet = require('node-mailjet');
 const sharp = require('sharp');
+const jwt = require('jsonwebtoken');
 
 const cache = new Map(); // Stores cached responses
 const DEFAULT_TTL = 60 * 60 * 6 * 1000; // Default TTL: 6 hours in milliseconds
@@ -55,6 +56,7 @@ const requiredEnvVars = [
   "MAIL_TO_ADMIN",
   "ADMIN_USERNAME",
   "ADMIN_PASSWORD",
+  "JWT_SECRET",
 ];
 
 const missingEnvVars = requiredEnvVars.filter((envVar) => !process.env[envVar]);
@@ -290,9 +292,11 @@ app.post("/api/auth/login", (req, res) => {
     username === process.env.ADMIN_USERNAME &&
     password === process.env.ADMIN_PASSWORD
   ) {
+    // Create a token
+    const token = jwt.sign({ username: username }, process.env.JWT_SECRET, { expiresIn: '1h' });
     res
       .status(200)
-      .json({ message: "Connexion réussie", token: "fake-jwt-token" });
+      .json({ message: "Connexion réussie", token: token });
   } else {
     res.status(401).json({ message: "Identifiants incorrects" });
   }
