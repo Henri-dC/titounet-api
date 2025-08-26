@@ -9,7 +9,7 @@ const Mailjet = require('node-mailjet');
 const sharp = require('sharp');
 
 const cache = new Map(); // Stores cached responses
-const DEFAULT_TTL = 60 * 5 * 1000; // Default TTL: 5 minutes in milliseconds
+const DEFAULT_TTL = 60 * 60 * 6 * 1000; // Default TTL: 6 hours in milliseconds
 
 function cacheMiddleware(req, res, next) {
   const key = req.originalUrl; // Use the full URL as the cache key
